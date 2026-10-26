@@ -15,7 +15,7 @@ const DATES = [
 ];
 const PLANS = [
   { id: "full" as Plan, name: "Trụ tháng", price: 325_000, detail: "Giữ chỗ cả 5 Chủ nhật · 65k/buổi", badge: "Tiết kiệm nhất" },
-  { id: "flex" as Plan, name: "Trụ bán phần", price: 135_000, detail: "Chọn trước 2 Chủ nhật · 67,5k/buổi", badge: "Linh hoạt" },
+  { id: "flex" as Plan, name: "Gói 2 buổi", price: 135_000, detail: "Chọn trước 2 Chủ nhật · 67,5k/buổi", badge: "Linh hoạt" },
   { id: "dropin" as Plan, name: "Vãng lai", price: 75_000, detail: "Chọn 1 Chủ nhật · 75k/buổi" },
 ];
 const PAYMENT = { configured: false, bank: "Ngân hàng sẽ được cấu hình" };
@@ -94,7 +94,7 @@ export default function Home() {
     <section className="relative mx-auto grid max-w-7xl gap-10 px-5 pb-14 pt-8 sm:px-8 lg:grid-cols-[1.05fr_.95fr] lg:px-12 lg:pb-24 lg:pt-14">
       <div className="max-w-2xl">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#a7b8aa] bg-white/70 px-3 py-1.5 text-xs font-bold"><Sparkles className="h-3.5 w-3.5" /> Cùng chốt sân trước, chơi thảnh thơi sau</div>
-        <h1 className="font-display text-[clamp(3rem,7vw,6.2rem)] font-black leading-[.9] tracking-[-.06em]">Vote ngày.<br /><span className="text-[#28745a]">Giữ sân.</span> Ra cầu.</h1>
+        <h1 className="font-display text-[clamp(3rem,7vw,6.2rem)] font-black leading-[.98] tracking-[-.045em]">Vote ngày.<br /><span className="text-[#28745a]">Giữ sân.</span> Ra cầu.</h1>
         <p className="mt-7 max-w-xl text-base leading-7 text-[#4c665b] sm:text-lg">Chọn gói phù hợp, thanh toán một lần và biết chắc Chủ nhật nào mình có sân. Giá trụ chỉ dành cho người cam kết sớm.</p>
         <div className="mt-9 grid max-w-xl grid-cols-3 gap-3">
           {[{ n: `${average}/12`, t: "Bình quân/buổi" }, { n: stats.totalPledges, t: "Người đã vote" }, { n: stats.reportedPayments, t: "Đã báo chuyển" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
