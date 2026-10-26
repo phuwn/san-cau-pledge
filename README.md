@@ -1,4 +1,34 @@
-# vinext-starter
+# Sân Cầu Pledge
+
+Trang pledge và thanh toán QR cho hội cầu lông Chủ nhật.
+
+## Chạy local
+
+1. Tạo file `.env.local` với các biến môi trường:
+
+   ```dotenv
+   DATABASE_URL=postgresql://...
+   NEXT_PUBLIC_VIETQR_BANK_ID=970407
+   NEXT_PUBLIC_VIETQR_ACCOUNT_NO=...
+   NEXT_PUBLIC_VIETQR_ACCOUNT_NAME=...
+   NEXT_PUBLIC_PAYMENT_BANK_NAME=Techcombank
+   ```
+
+   `970407` là BIN VietQR của Techcombank. Có thể thay bằng ngân hàng khác.
+2. Chạy `npm install`.
+3. Chạy `npm run dev`.
+
+API sẽ tự tạo bảng `pledges` trong lần gọi đầu tiên. Trên Vercel, kết nối Neon
+qua Marketplace để `DATABASE_URL` được cấp cho Production, Preview và Development.
+
+## Deploy
+
+Project dùng Next.js tiêu chuẩn và được thiết kế để deploy trực tiếp từ nhánh
+`main` trên Vercel.
+
+---
+
+# Nguồn starter cũ
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

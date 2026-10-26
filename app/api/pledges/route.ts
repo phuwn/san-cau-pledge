@@ -1,5 +1,5 @@
 import { desc, eq, sql } from "drizzle-orm";
-import { getDb } from "../../../db";
+import { ensureDb, getDb } from "../../../db";
 import { pledges } from "../../../db/schema";
 
 const ALLOWED_DATES = new Set(["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"]);
@@ -17,20 +17,25 @@ function publicName(name: string) {
 
 export async function GET() {
   try {
+    await ensureDb();
     const rows = await getDb().select({ name: pledges.name, plan: pledges.plan, selectedDates: pledges.selectedDates, seatCount: pledges.seatCount, status: pledges.status }).from(pledges).orderBy(desc(pledges.createdAt)).limit(100);
     const dates = Object.fromEntries([...ALLOWED_DATES].map(date => [date, 0]));
     let totalCommitted = 0, reportedPayments = 0;
     for (const row of rows) {
-      for (const date of safeDates(row.selectedDates)) if (date in dates) dates[date] += 1;
-      totalCommitted += row.seatCount;
-      if (row.status === "reported" || row.status === "confirmed") reportedPayments += 1;
+      const booked = row.status === "reported" || row.status === "confirmed";
+      if (booked) {
+        for (const date of safeDates(row.selectedDates)) if (date in dates) dates[date] += 1;
+        totalCommitted += row.seatCount;
+        reportedPayments += 1;
+      }
     }
-    return Response.json({ stats: { totalPledges: rows.length, reportedPayments, totalCommitted, dates, recent: rows.slice(0, 8).map(row => ({ name: publicName(row.name), plan: row.plan, seatCount: row.seatCount })) } });
+    return Response.json({ stats: { totalPledges: rows.length, reportedPayments, totalCommitted, dates, recent: rows.filter(row => row.status === "reported" || row.status === "confirmed").slice(0, 8).map(row => ({ name: publicName(row.name), plan: row.plan, seatCount: row.seatCount })) } });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Không thể tải dữ liệu pledge." }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
   try {
+    await ensureDb();
     const body = await request.json() as { name?: string; contact?: string; plan?: string; selectedDates?: string[] };
     const name = body.name?.trim() ?? "", contact = body.contact?.trim() ?? "", plan = body.plan as Plan;
     const selectedDates = Array.isArray(body.selectedDates) ? [...new Set(body.selectedDates.filter(date => ALLOWED_DATES.has(date)))] : [];
@@ -46,6 +51,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    await ensureDb();
     const body = await request.json() as { id?: string; action?: string };
     if (!body.id || body.action !== "report_payment") return Response.json({ error: "Yêu cầu không hợp lệ." }, { status: 400 });
     const [updated] = await getDb().update(pledges).set({ status: "reported", reportedAt: sql`CURRENT_TIMESTAMP` }).where(eq(pledges.id, body.id)).returning({ id: pledges.id, status: pledges.status });

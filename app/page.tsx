@@ -18,7 +18,13 @@ const PLANS = [
   { id: "flex" as Plan, name: "Gói 2 buổi", price: 135_000, detail: "Chọn trước 2 Chủ nhật · 67,5k/buổi", badge: "Linh hoạt" },
   { id: "dropin" as Plan, name: "Vãng lai", price: 75_000, detail: "Chọn 1 Chủ nhật · 75k/buổi" },
 ];
-const PAYMENT = { configured: false, bank: "Ngân hàng sẽ được cấu hình" };
+const PAYMENT = {
+  bankId: process.env.NEXT_PUBLIC_VIETQR_BANK_ID ?? "",
+  accountNo: process.env.NEXT_PUBLIC_VIETQR_ACCOUNT_NO ?? "",
+  accountName: process.env.NEXT_PUBLIC_VIETQR_ACCOUNT_NAME ?? "",
+  bank: process.env.NEXT_PUBLIC_PAYMENT_BANK_NAME ?? "Ngân hàng sẽ được cấu hình",
+};
+const paymentConfigured = Boolean(PAYMENT.bankId && PAYMENT.accountNo);
 const EMPTY: Stats = { totalPledges: 0, reportedPayments: 0, totalCommitted: 0, dates: Object.fromEntries(DATES.map(d => [d.value, 0])), recent: [] };
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value) + "đ";
 const planLabel = (plan: Plan) => PLANS.find(p => p.id === plan)?.name ?? plan;
@@ -33,6 +39,17 @@ function MockQr({ reference, amount }: { reference: string; amount: number }) {
   return <div className="relative mx-auto aspect-square w-52 overflow-hidden rounded-3xl border-8 border-white bg-white p-2 shadow-[0_18px_60px_rgba(23,54,43,.16)]">
     <div className="grid h-full grid-cols-[repeat(15,1fr)] gap-[2px] rounded-xl bg-white p-1">{cells.map((on, i) => <span key={i} className={on ? "rounded-[1px] bg-[#17362b]" : "bg-transparent"} />)}</div>
     <div className="absolute inset-0 grid place-items-center"><span className="grid h-11 w-11 place-items-center rounded-2xl border-4 border-white bg-[#d8ff57]"><QrCode className="h-5 w-5" /></span></div>
+  </div>;
+}
+
+function PaymentQr({ reference, amount }: { reference: string; amount: number }) {
+  if (!paymentConfigured) return <MockQr reference={reference} amount={amount} />;
+  const params = new URLSearchParams({ amount: String(amount), addInfo: reference });
+  if (PAYMENT.accountName) params.set("accountName", PAYMENT.accountName);
+  const source = `https://img.vietqr.io/image/${encodeURIComponent(PAYMENT.bankId)}-${encodeURIComponent(PAYMENT.accountNo)}-compact2.png?${params}`;
+  return <div className="mx-auto aspect-square w-52 overflow-hidden rounded-3xl border-8 border-white bg-white shadow-[0_18px_60px_rgba(23,54,43,.16)]">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={source} alt={`VietQR chuyển ${money(amount)} với nội dung ${reference}`} className="h-full w-full object-contain" />
   </div>;
 }
 
@@ -53,7 +70,14 @@ export default function Home() {
   async function loadStats() {
     try { const r = await fetch("/api/pledges", { cache: "no-store" }); if (r.ok) setStats(((await r.json()) as { stats: Stats }).stats); } catch { /* preview can warm up */ }
   }
-  useEffect(() => { void loadStats(); }, []);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/pledges", { cache: "no-store" })
+      .then(async response => response.ok ? (await response.json() as { stats: Stats }).stats : null)
+      .then(nextStats => { if (active && nextStats) setStats(nextStats); })
+      .catch(() => { /* the database can still be warming up */ });
+    return () => { active = false; };
+  }, []);
 
   function choosePlan(next: Plan) { setPlan(next); setDates(next === "full" ? DATES.map(d => d.value) : []); setError(""); }
   function toggleDate(value: string) {
@@ -119,11 +143,11 @@ export default function Home() {
         {step === "payment" && pledge && <div className="p-5 sm:p-8">
           <button onClick={() => setStep("vote")} className="mb-6 flex items-center gap-1 text-xs font-bold text-[#557064]"><ChevronLeft className="h-4 w-4" /> Quay lại</button>
           <div className="text-center"><p className="text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Bước 2/2</p><h2 className="font-display mt-2 text-3xl font-black">Quét QR để chốt suất</h2><p className="mt-2 text-sm text-[#6b7f74]">{planLabel(pledge.plan)} · {pledge.selectedDates.length} buổi</p></div>
-          {!PAYMENT.configured && <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs font-bold text-amber-800">Bản preview — QR ngân hàng sẽ hoạt động sau khi cấu hình tài khoản nhận tiền.</div>}
-          <div className="mt-6"><MockQr reference={pledge.reference} amount={pledge.amount} /></div>
+          {!paymentConfigured && <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs font-bold text-amber-800">Bản preview — QR ngân hàng sẽ hoạt động sau khi cấu hình tài khoản nhận tiền.</div>}
+          <div className="mt-6"><PaymentQr reference={pledge.reference} amount={pledge.amount} /></div>
           <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] p-4"><div className="flex justify-between text-sm"><span className="text-[#6b7f74]">Số tiền</span><strong>{money(pledge.amount)}</strong></div><div className="mt-3 flex justify-between text-sm"><span className="text-[#6b7f74]">Nội dung</span><button onClick={copyReference} className="flex items-center gap-1.5 font-black text-[#28745a]">{pledge.reference} {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></div><div className="mt-3 flex justify-between text-sm"><span className="text-[#6b7f74]">Ngân hàng</span><strong>{PAYMENT.bank}</strong></div></div>
           {error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-          <button onClick={reportPayment} disabled={loading} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#d8ff57] px-5 text-sm font-black hover:bg-[#ccf04f] disabled:opacity-60">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Banknote className="h-5 w-5" />} {PAYMENT.configured ? "Tôi đã chuyển khoản" : "Đánh dấu đã chuyển (demo)"}</button>
+          <button onClick={reportPayment} disabled={loading} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#d8ff57] px-5 text-sm font-black hover:bg-[#ccf04f] disabled:opacity-60">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Banknote className="h-5 w-5" />} {paymentConfigured ? "Tôi đã chuyển khoản" : "Đánh dấu đã chuyển (demo)"}</button>
         </div>}
 
         {step === "done" && pledge && <div className="p-8 text-center sm:p-12"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[28px] bg-[#d8ff57]"><CheckCircle2 className="h-10 w-10" /></span><p className="mt-7 text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Đã ghi nhận</p><h2 className="font-display mt-2 text-4xl font-black">Hẹn bạn trên sân!</h2><p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-[#6b7f74]">Pledge <strong className="text-[#17362b]">{pledge.reference}</strong> đang chờ BTC đối soát.</p><div className="mt-7 rounded-2xl bg-[#f2f5ea] p-5 text-left"><div className="flex justify-between text-sm"><span>Gói</span><strong>{planLabel(pledge.plan)}</strong></div><div className="mt-3 flex justify-between text-sm"><span>Số buổi</span><strong>{pledge.selectedDates.length}</strong></div><div className="mt-3 flex justify-between text-sm"><span>Đã chuyển</span><strong>{money(pledge.amount)}</strong></div></div><button onClick={() => { setStep("vote"); setPledge(null); setName(""); setContact(""); choosePlan("full"); }} className="mt-7 text-sm font-black text-[#28745a] underline decoration-2 underline-offset-4">Tạo pledge khác</button></div>}

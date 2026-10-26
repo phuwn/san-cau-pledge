@@ -1,7 +1,6 @@
-import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const pledges = sqliteTable("pledges", {
+export const pledges = pgTable("pledges", {
   id: text("id").primaryKey(),
   reference: text("reference").notNull().unique(),
   name: text("name").notNull(),
@@ -11,6 +10,6 @@ export const pledges = sqliteTable("pledges", {
   seatCount: integer("seat_count").notNull(),
   amount: integer("amount").notNull(),
   status: text("status").notNull().default("pending"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  reportedAt: text("reported_at"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  reportedAt: timestamp("reported_at", { withTimezone: true }),
 });
