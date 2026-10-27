@@ -36,17 +36,11 @@ async function verifyPaidOrder(orderId: string, reference: string, expectedAmoun
   try {
     const client = new SePayPgClient({ env: environment, merchant_id: merchantId, secret_key: secretKey });
     const response = await client.order.retrieve(orderId);
-    const order = response.data?.data;
-    const approved = Array.isArray(order?.transactions) && order.transactions.some((transaction: Record<string, unknown>) =>
-      transaction.transaction_status === "APPROVED" &&
-      transaction.transaction_currency === "VND" &&
-      Number(transaction.transaction_amount) === expectedAmount,
-    );
+    const order = response.data?.data ?? response.data;
     return order?.order_invoice_number === reference &&
       order?.order_status === "CAPTURED" &&
       order?.order_currency === "VND" &&
-      Number(order?.order_amount) === expectedAmount &&
-      approved;
+      Number(order?.order_amount) === expectedAmount;
   } catch {
     return false;
   }
