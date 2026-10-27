@@ -62,11 +62,13 @@ export async function POST(request: Request) {
     };
 
     const fields = client.checkout.initOneTimePaymentFields({
-      payment_method: "BANK_TRANSFER",
-      order_invoice_number: pledge.reference,
       order_amount: pledge.amount,
+      merchant: merchantId,
       currency: "VND",
+      operation: "PURCHASE",
       order_description: `San Cau pledge ${pledge.reference}`,
+      order_invoice_number: pledge.reference,
+      payment_method: "BANK_TRANSFER",
       success_url: callback("success"),
       error_url: callback("error"),
       cancel_url: callback("cancel"),
