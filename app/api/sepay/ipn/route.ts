@@ -33,17 +33,22 @@ async function verifyPaidOrder(orderId: string, reference: string, expectedAmoun
   const environment = process.env.SEPAY_ENV === "production" ? "production" : "sandbox";
   if (!merchantId || !secretKey) return false;
 
-  try {
-    const client = new SePayPgClient({ env: environment, merchant_id: merchantId, secret_key: secretKey });
-    const response = await client.order.retrieve(orderId);
-    const order = response.data?.data ?? response.data;
-    return order?.order_invoice_number === reference &&
-      order?.order_status === "CAPTURED" &&
-      order?.order_currency === "VND" &&
-      Number(order?.order_amount) === expectedAmount;
-  } catch {
-    return false;
+  const client = new SePayPgClient({ env: environment, merchant_id: merchantId, secret_key: secretKey });
+  for (const identifier of [orderId, reference]) {
+    try {
+      const response = await client.order.retrieve(identifier);
+      const candidates = [response.data?.data, response.data?.result?.data, response.data?.result, response.data];
+      if (candidates.some(order =>
+        order?.order_invoice_number === reference &&
+        order?.order_status === "CAPTURED" &&
+        order?.order_currency === "VND" &&
+        Number(order?.order_amount) === expectedAmount,
+      )) return true;
+    } catch {
+      // Sandbox API versions differ on whether this path accepts order ID or invoice number.
+    }
   }
+  return false;
 }
 
 export async function POST(request: Request) {
