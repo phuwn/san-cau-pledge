@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Banknote, CalendarDays, Check, CheckCircle2, ChevronLeft, Copy, Loader2, QrCode, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { courtPlan, planName, quoteSelection, SESSION_DATES, type Plan } from "../lib/pledge-config";
 
 type Step = "vote" | "payment" | "done";
 type Pledge = { id: string; reference: string; name: string; plan: Plan; selectedDates: string[]; amount: number; status: "pending" | "reported" | "confirmed" };
-type Stats = { totalPledges: number; reportedPayments: number; totalCommitted: number; dates: Record<string, number>; recent: Array<{ name: string; plan: Plan; seatCount: number }> };
+type Participant = { name: string; plan: Plan };
+type Stats = { totalPledges: number; reportedPayments: number; totalCommitted: number; dates: Record<string, number>; participants: Record<string, Participant[]>; recent: Array<{ name: string; plan: Plan; seatCount: number }> };
 type CheckoutResponse = { checkoutUrl?: string; fields?: Record<string, string | number>; error?: string };
 
 const DATES = SESSION_DATES;
-const EMPTY: Stats = { totalPledges: 0, reportedPayments: 0, totalCommitted: 0, dates: Object.fromEntries(DATES.map(d => [d.value, 0])), recent: [] };
+const EMPTY: Stats = { totalPledges: 0, reportedPayments: 0, totalCommitted: 0, dates: Object.fromEntries(DATES.map(d => [d.value, 0])), participants: Object.fromEntries(DATES.map(d => [d.value, []])), recent: [] };
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value) + "đ";
 const planLabel = (plan: Plan) => planName(plan);
 
@@ -24,8 +26,11 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [selectedRosterDate, setSelectedRosterDate] = useState<string | null>(null);
   const selection = useMemo(() => quoteSelection(dates.length), [dates.length]);
   const totalBookedSlots = Object.values(stats.dates).reduce((sum, count) => sum + count, 0);
+  const selectedRosterDay = DATES.find(date => date.value === selectedRosterDate);
+  const selectedRoster = selectedRosterDate ? (stats.participants[selectedRosterDate] ?? []) : [];
 
   async function loadStats() {
     try { const r = await fetch("/api/pledges", { cache: "no-store" }); if (r.ok) setStats(((await r.json()) as { stats: Stats }).stats); } catch { /* preview can warm up */ }
@@ -168,7 +173,7 @@ export default function Home() {
               : court.overflow > 0
                 ? `${court.slotsToNextCourt} suất mở sân ${court.courts + 1}`
                 : `${Math.max(0, court.capacity - count)} chỗ còn lại`;
-            return <div key={date.value} className="rounded-2xl bg-white/8 p-2.5 text-center"><p className="text-[10px] font-bold text-white/55">CN</p><p className="mt-0.5 text-lg font-black">{date.day}</p><p className="mt-2 text-sm font-black text-[#d8ff57]">{court.courts} sân</p><p className="mt-1 text-[10px] font-bold text-white/75">{count} suất chốt</p><p className="mt-1 min-h-7 text-[9px] leading-3 text-white/50">{note}</p></div>;
+            return <button type="button" key={date.value} onClick={() => setSelectedRosterDate(date.value)} aria-label={`Xem người tham gia Chủ nhật ${date.day}`} className="rounded-2xl bg-white/8 p-2.5 text-center transition hover:-translate-y-0.5 hover:bg-white/13 focus:outline-none focus:ring-2 focus:ring-[#d8ff57]"><p className="text-[10px] font-bold text-white/55">CN</p><p className="mt-0.5 text-lg font-black">{date.day}</p><p className="mt-2 text-sm font-black text-[#d8ff57]">{court.courts} sân</p><p className="mt-1 text-[10px] font-bold text-white/75">{count} suất chốt</p><p className="mt-1 min-h-7 text-[9px] leading-3 text-white/50">{note}</p><p className="mt-1 text-[8px] font-bold uppercase tracking-wide text-[#d8ff57]/65">Xem người chơi</p></button>;
           })}</div>
         </div>
       </div>
@@ -184,7 +189,11 @@ export default function Home() {
           <div className="mt-6 grid gap-3 sm:grid-cols-2"><label><span className="mb-2 block text-xs font-black uppercase tracking-wider text-[#557064]">Tên của bạn</span><input value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Phương" className="h-12 w-full rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] px-4 text-sm font-semibold outline-none focus:border-[#28745a] focus:ring-4 focus:ring-[#28745a]/10" /></label><label><span className="mb-2 block text-xs font-black uppercase tracking-wider text-[#557064]">Zalo / SĐT</span><input value={contact} onChange={e => setContact(e.target.value)} placeholder="Không bắt buộc" className="h-12 w-full rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] px-4 text-sm font-semibold outline-none focus:border-[#28745a] focus:ring-4 focus:ring-[#28745a]/10" /></label></div>
           {error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
           <button disabled={loading || !selection} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#17362b] px-5 text-sm font-black text-white hover:bg-[#214a3b] disabled:cursor-not-allowed disabled:opacity-45">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <WalletCards className="h-5 w-5" />} {selection ? `Vote & tạo mã thanh toán · ${money(selection.amount)}` : "Chọn ngày để tiếp tục"} {!loading && selection && <ArrowRight className="h-4 w-4" />}</button>
-          <p className="mt-4 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#76877e]"><ShieldCheck className="h-3.5 w-3.5" /> Suất có thể chuyển cho bạn bè nếu bạn bận</p>
+          <div className="mt-5 rounded-2xl bg-[#f2f5ea] p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-[#557064]">Sau khi bạn chốt</p><div className="mt-3 grid gap-3 sm:grid-cols-3">{[
+            { icon: ShieldCheck, title: "Giữ suất", detail: "Suất được tính ngay khi thanh toán xác nhận." },
+            { icon: Users, title: "Khóa sân", detail: "Mỗi 5 suất chốt tạo đủ quỹ cho 1 sân cứng." },
+            { icon: CheckCircle2, title: "Bận vẫn ổn", detail: "Có thể chuyển suất cho bạn bè nếu đổi lịch." },
+          ].map(item => <div key={item.title} className="flex gap-2.5 sm:block"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-[#28745a]"><item.icon className="h-4 w-4" /></span><div><p className="text-xs font-black sm:mt-2">{item.title}</p><p className="mt-0.5 text-[10px] leading-4 text-[#6b7f74]">{item.detail}</p></div></div>)}</div></div>
         </form>}
 
         {step === "payment" && pledge && <div className="p-5 sm:p-8">
@@ -202,5 +211,12 @@ export default function Home() {
     </section>
 
     <section className="relative border-t border-[#d5ddd1] bg-[#edf0e5]"><div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:px-12"><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Sổ pledge công khai</p><h2 className="font-display mt-3 text-3xl font-black">Mỗi lời hứa làm sân cầu chắc hơn.</h2><p className="mt-4 max-w-md text-sm leading-6 text-[#63776d]">Tên được rút gọn để giữ riêng tư. Số điện thoại và thông tin thanh toán không hiển thị ở đây.</p></div><div className="grid gap-3 sm:grid-cols-2">{stats.recent.length === 0 ? <div className="col-span-full rounded-3xl border border-dashed border-[#b8c4b8] bg-white/45 p-8 text-center text-sm font-semibold text-[#6b7f74]">Chưa có pledge nào. Bạn sẽ là người mở hàng chứ?</div> : stats.recent.map((item, i) => <div key={`${item.name}-${i}`} className="flex items-center gap-3 rounded-2xl border border-[#d2dbcf] bg-white/70 p-4"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#17362b] text-sm font-black text-[#d8ff57]">{item.name[0]?.toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{item.name}</p><p className="mt-0.5 text-xs font-semibold text-[#6b7f74]">{planLabel(item.plan)} · {item.seatCount} buổi</p></div><CheckCircle2 className="h-4 w-4 text-[#28745a]" /></div>)}</div></div></section>
+
+    <Dialog open={Boolean(selectedRosterDate)} onOpenChange={open => { if (!open) setSelectedRosterDate(null); }}>
+      <DialogContent className="overflow-hidden rounded-[28px] border-[#c8d4c7] bg-[#f7f8ee] p-0 [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:bg-white/10 [&_[data-slot=dialog-close]]:p-1.5 [&_[data-slot=dialog-close]]:text-white [&_[data-slot=dialog-close]]:opacity-100 sm:max-w-md">
+        <DialogHeader className="bg-[#17362b] p-6 pr-12 text-left text-white"><DialogTitle className="font-display text-2xl font-black">Chủ nhật {selectedRosterDay?.day}/11</DialogTitle><DialogDescription className="text-white/65">{selectedRoster.length} người đã thanh toán và chốt suất</DialogDescription></DialogHeader>
+        <div className="max-h-[55vh] overflow-y-auto p-5">{selectedRoster.length === 0 ? <div className="rounded-2xl border border-dashed border-[#b8c4b8] bg-white/60 p-7 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-[#eef4df]"><Users className="h-5 w-5 text-[#28745a]" /></span><p className="mt-3 text-sm font-black">Chưa có ai chốt ngày này</p><p className="mt-1 text-xs leading-5 text-[#6b7f74]">Bạn có thể là người đầu tiên giúp mở sân.</p></div> : <div className="space-y-2">{selectedRoster.map((person, index) => <div key={`${person.name}-${index}`} className="flex items-center gap-3 rounded-2xl border border-[#d7dfd5] bg-white p-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#17362b] text-sm font-black text-[#d8ff57]">{person.name[0]?.toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{person.name}</p><p className="mt-0.5 text-xs font-semibold text-[#6b7f74]">{planLabel(person.plan)}</p></div><CheckCircle2 className="h-4 w-4 text-[#28745a]" /></div>)}</div>}<p className="mt-4 text-center text-[10px] font-semibold text-[#76877e]">Tên được rút gọn để bảo vệ riêng tư</p></div>
+      </DialogContent>
+    </Dialog>
   </main>;
 }

@@ -30,16 +30,20 @@ export async function GET(request: Request) {
     }
     const rows = await getDb().select({ name: pledges.name, plan: pledges.plan, selectedDates: pledges.selectedDates, seatCount: pledges.seatCount, status: pledges.status }).from(pledges).orderBy(desc(pledges.createdAt)).limit(100);
     const dates = Object.fromEntries([...ALLOWED_DATES].map(date => [date, 0]));
+    const participants = Object.fromEntries([...ALLOWED_DATES].map(date => [date, [] as Array<{ name: string; plan: string }>]));
     let totalCommitted = 0, reportedPayments = 0;
     for (const row of rows) {
       const booked = row.status === "reported" || row.status === "confirmed";
       if (booked) {
-        for (const date of safeDates(row.selectedDates)) if (date in dates) dates[date] += 1;
+        for (const date of safeDates(row.selectedDates)) if (date in dates) {
+          dates[date] += 1;
+          participants[date].push({ name: publicName(row.name), plan: row.plan });
+        }
         totalCommitted += row.seatCount;
         reportedPayments += 1;
       }
     }
-    return Response.json({ stats: { totalPledges: rows.length, reportedPayments, totalCommitted, dates, recent: rows.filter(row => row.status === "reported" || row.status === "confirmed").slice(0, 8).map(row => ({ name: publicName(row.name), plan: row.plan, seatCount: row.seatCount })) } });
+    return Response.json({ stats: { totalPledges: rows.length, reportedPayments, totalCommitted, dates, participants, recent: rows.filter(row => row.status === "reported" || row.status === "confirmed").slice(0, 8).map(row => ({ name: publicName(row.name), plan: row.plan, seatCount: row.seatCount })) } });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Không thể tải dữ liệu pledge." }, { status: 500 }); }
 }
 
