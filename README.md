@@ -20,6 +20,8 @@ Trang pledge và thanh toán QR cho hội cầu lông Chủ nhật.
 
    Các biến `NEXT_PUBLIC_VIETQR_*` chỉ còn dùng cho QR dự phòng. Secret key
    SePay tuyệt đối không được dùng tiền tố `NEXT_PUBLIC_` hoặc commit vào Git.
+   Khi vận hành Production song song với cấu hình Sandbox để rollback, đặt thêm
+   `SEPAY_ACTIVE_ENV=production` và `SEPAY_LIVE_MERCHANT_ID=SP-LIVE-...`.
 2. Chạy `npm install`.
 3. Chạy `npm run dev`.
 

@@ -6,9 +6,9 @@ import { pledges } from "../../../../db/schema";
 type SePayEnvironment = "sandbox" | "production";
 
 function sepayConfig() {
-  const merchantId = process.env.SEPAY_MERCHANT_ID;
+  const merchantId = process.env.SEPAY_LIVE_MERCHANT_ID ?? process.env.SEPAY_MERCHANT_ID;
   const secretKey = process.env.SEPAY_SECRET_KEY;
-  const environment = (process.env.SEPAY_ENV ?? "sandbox") as SePayEnvironment;
+  const environment = (process.env.SEPAY_ACTIVE_ENV ?? process.env.SEPAY_ENV ?? "sandbox") as SePayEnvironment;
 
   if (!merchantId || !secretKey) {
     throw new Error("SePay chưa được cấu hình trên server.");

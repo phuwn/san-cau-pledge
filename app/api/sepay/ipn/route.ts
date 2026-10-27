@@ -28,9 +28,10 @@ function secretsMatch(received: string | null, expected: string) {
 }
 
 async function verifyPaidOrder(orderId: string, reference: string, expectedAmount: number) {
-  const merchantId = process.env.SEPAY_MERCHANT_ID;
+  const merchantId = process.env.SEPAY_LIVE_MERCHANT_ID ?? process.env.SEPAY_MERCHANT_ID;
   const secretKey = process.env.SEPAY_SECRET_KEY;
-  const environment = process.env.SEPAY_ENV === "production" ? "production" : "sandbox";
+  const configuredEnvironment = process.env.SEPAY_ACTIVE_ENV ?? process.env.SEPAY_ENV;
+  const environment = configuredEnvironment === "production" ? "production" : "sandbox";
   if (!merchantId || !secretKey) return false;
 
   const client = new SePayPgClient({ env: environment, merchant_id: merchantId, secret_key: secretKey });
