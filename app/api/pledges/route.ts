@@ -1,10 +1,9 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { ensureDb, getDb } from "../../../db";
 import { pledges } from "../../../db/schema";
+import { quoteSelection, SESSION_DATES } from "../../../lib/pledge-config";
 
-const ALLOWED_DATES = new Set(["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"]);
-const PLAN_RULES = { full: { amount: 325_000, seats: 5 }, flex: { amount: 135_000, seats: 2 }, dropin: { amount: 75_000, seats: 1 } } as const;
-type Plan = keyof typeof PLAN_RULES;
+const ALLOWED_DATES = new Set<string>(SESSION_DATES.map(date => date.value));
 
 function safeDates(value: string) {
   try { const dates = JSON.parse(value); return Array.isArray(dates) ? dates.filter((date): date is string => typeof date === "string") : []; }
@@ -47,15 +46,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await ensureDb();
-    const body = await request.json() as { name?: string; contact?: string; plan?: string; selectedDates?: string[] };
-    const name = body.name?.trim() ?? "", contact = body.contact?.trim() ?? "", plan = body.plan as Plan;
+    const body = await request.json() as { name?: string; contact?: string; selectedDates?: string[] };
+    const name = body.name?.trim() ?? "", contact = body.contact?.trim() ?? "";
     const selectedDates = Array.isArray(body.selectedDates) ? [...new Set(body.selectedDates.filter(date => ALLOWED_DATES.has(date)))] : [];
-    const rule = PLAN_RULES[plan];
+    const quote = quoteSelection(selectedDates.length);
     if (name.length < 2 || name.length > 60) return Response.json({ error: "Tên cần từ 2–60 ký tự." }, { status: 400 });
     if (contact.length > 100) return Response.json({ error: "Thông tin liên hệ quá dài." }, { status: 400 });
-    if (!rule || selectedDates.length !== rule.seats) return Response.json({ error: "Gói hoặc số ngày không hợp lệ." }, { status: 400 });
+    if (!quote) return Response.json({ error: "Hãy chọn ít nhất một Chủ nhật hợp lệ." }, { status: 400 });
     const id = crypto.randomUUID(), reference = `SC${id.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
-    const [created] = await getDb().insert(pledges).values({ id, reference, name, contact, plan, selectedDates: JSON.stringify(selectedDates), seatCount: rule.seats, amount: rule.amount }).returning();
+    const [created] = await getDb().insert(pledges).values({ id, reference, name, contact, plan: quote.plan, selectedDates: JSON.stringify(selectedDates), seatCount: selectedDates.length, amount: quote.amount }).returning();
     return Response.json({ pledge: { ...created, selectedDates } }, { status: 201 });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Không thể tạo pledge." }, { status: 500 }); }
 }
