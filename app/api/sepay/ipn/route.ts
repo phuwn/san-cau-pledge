@@ -7,6 +7,7 @@ import { pledges } from "../../../../db/schema";
 type SePayIpn = {
   notification_type?: string;
   order?: {
+    order_id?: string;
     order_status?: string;
     order_amount?: string;
     order_currency?: string;
@@ -26,7 +27,7 @@ function secretsMatch(received: string | null, expected: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-async function verifyPaidOrder(reference: string, expectedAmount: number) {
+async function verifyPaidOrder(orderId: string, reference: string, expectedAmount: number) {
   const merchantId = process.env.SEPAY_MERCHANT_ID;
   const secretKey = process.env.SEPAY_SECRET_KEY;
   const environment = process.env.SEPAY_ENV === "production" ? "production" : "sandbox";
@@ -34,7 +35,7 @@ async function verifyPaidOrder(reference: string, expectedAmount: number) {
 
   try {
     const client = new SePayPgClient({ env: environment, merchant_id: merchantId, secret_key: secretKey });
-    const response = await client.order.retrieve(reference);
+    const response = await client.order.retrieve(orderId);
     const order = response.data?.data;
     const approved = Array.isArray(order?.transactions) && order.transactions.some((transaction: Record<string, unknown>) =>
       transaction.transaction_status === "APPROVED" &&
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
     }
 
     const authenticated = secretsMatch(request.headers.get("x-secret-key"), secretKey) ||
-      await verifyPaidOrder(reference, pledge.amount);
+      Boolean(payload.order?.order_id && await verifyPaidOrder(payload.order.order_id, reference, pledge.amount));
     if (!authenticated) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
