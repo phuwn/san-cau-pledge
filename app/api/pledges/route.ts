@@ -15,9 +15,20 @@ function publicName(name: string) {
   return parts.length <= 1 ? (parts[0] ?? "Người chơi") : `${parts[0]} ${parts.at(-1)?.slice(0, 1)}.`;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await ensureDb();
+    const pledgeId = new URL(request.url).searchParams.get("id");
+    if (pledgeId) {
+      const [pledge] = await getDb()
+        .select({ id: pledges.id, reference: pledges.reference, plan: pledges.plan, selectedDates: pledges.selectedDates, amount: pledges.amount, status: pledges.status })
+        .from(pledges)
+        .where(eq(pledges.id, pledgeId))
+        .limit(1);
+      return pledge
+        ? Response.json({ pledge: { ...pledge, selectedDates: safeDates(pledge.selectedDates) } })
+        : Response.json({ error: "Không tìm thấy pledge." }, { status: 404 });
+    }
     const rows = await getDb().select({ name: pledges.name, plan: pledges.plan, selectedDates: pledges.selectedDates, seatCount: pledges.seatCount, status: pledges.status }).from(pledges).orderBy(desc(pledges.createdAt)).limit(100);
     const dates = Object.fromEntries([...ALLOWED_DATES].map(date => [date, 0]));
     let totalCommitted = 0, reportedPayments = 0;

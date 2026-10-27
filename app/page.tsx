@@ -7,6 +7,7 @@ type Plan = "full" | "flex" | "dropin";
 type Step = "vote" | "payment" | "done";
 type Pledge = { id: string; reference: string; name: string; plan: Plan; selectedDates: string[]; amount: number; status: "pending" | "reported" | "confirmed" };
 type Stats = { totalPledges: number; reportedPayments: number; totalCommitted: number; dates: Record<string, number>; recent: Array<{ name: string; plan: Plan; seatCount: number }> };
+type CheckoutResponse = { checkoutUrl?: string; fields?: Record<string, string | number>; error?: string };
 
 const DATES = [
   { value: "2026-11-01", day: "01" }, { value: "2026-11-08", day: "08" },
@@ -18,40 +19,9 @@ const PLANS = [
   { id: "flex" as Plan, name: "Gói 2 buổi", price: 135_000, detail: "Chọn trước 2 Chủ nhật · 67,5k/buổi", badge: "Linh hoạt" },
   { id: "dropin" as Plan, name: "Vãng lai", price: 75_000, detail: "Chọn 1 Chủ nhật · 75k/buổi" },
 ];
-const PAYMENT = {
-  bankId: process.env.NEXT_PUBLIC_VIETQR_BANK_ID ?? "",
-  accountNo: process.env.NEXT_PUBLIC_VIETQR_ACCOUNT_NO ?? "",
-  accountName: process.env.NEXT_PUBLIC_VIETQR_ACCOUNT_NAME ?? "",
-  bank: process.env.NEXT_PUBLIC_PAYMENT_BANK_NAME ?? "Ngân hàng sẽ được cấu hình",
-};
-const paymentConfigured = Boolean(PAYMENT.bankId && PAYMENT.accountNo);
 const EMPTY: Stats = { totalPledges: 0, reportedPayments: 0, totalCommitted: 0, dates: Object.fromEntries(DATES.map(d => [d.value, 0])), recent: [] };
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value) + "đ";
 const planLabel = (plan: Plan) => PLANS.find(p => p.id === plan)?.name ?? plan;
-
-function MockQr({ reference, amount }: { reference: string; amount: number }) {
-  const seed = `${reference}-${amount}`;
-  const cells = Array.from({ length: 225 }, (_, index) => {
-    const row = Math.floor(index / 15), col = index % 15;
-    const finder = (row < 5 && col < 5) || (row < 5 && col > 9) || (row > 9 && col < 5);
-    return finder || (seed.charCodeAt(index % seed.length) * (index + 7)) % 11 < 5;
-  });
-  return <div className="relative mx-auto aspect-square w-52 overflow-hidden rounded-3xl border-8 border-white bg-white p-2 shadow-[0_18px_60px_rgba(23,54,43,.16)]">
-    <div className="grid h-full grid-cols-[repeat(15,1fr)] gap-[2px] rounded-xl bg-white p-1">{cells.map((on, i) => <span key={i} className={on ? "rounded-[1px] bg-[#17362b]" : "bg-transparent"} />)}</div>
-    <div className="absolute inset-0 grid place-items-center"><span className="grid h-11 w-11 place-items-center rounded-2xl border-4 border-white bg-[#d8ff57]"><QrCode className="h-5 w-5" /></span></div>
-  </div>;
-}
-
-function PaymentQr({ reference, amount }: { reference: string; amount: number }) {
-  if (!paymentConfigured) return <MockQr reference={reference} amount={amount} />;
-  const params = new URLSearchParams({ amount: String(amount), addInfo: reference });
-  if (PAYMENT.accountName) params.set("accountName", PAYMENT.accountName);
-  const source = `https://img.vietqr.io/image/${encodeURIComponent(PAYMENT.bankId)}-${encodeURIComponent(PAYMENT.accountNo)}-compact2.png?${params}`;
-  return <div className="mx-auto aspect-square w-52 overflow-hidden rounded-3xl border-8 border-white bg-white shadow-[0_18px_60px_rgba(23,54,43,.16)]">
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={source} alt={`VietQR chuyển ${money(amount)} với nội dung ${reference}`} className="h-full w-full object-contain" />
-  </div>;
-}
 
 export default function Home() {
   const [stats, setStats] = useState<Stats>(EMPTY);
@@ -79,11 +49,89 @@ export default function Home() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentResult = params.get("payment");
+    const pledgeId = params.get("pledge");
+    if (!paymentResult || !pledgeId) return;
+
+    const stored = localStorage.getItem("badminton-pledge");
+    const cached = stored ? JSON.parse(stored) as Pledge : null;
+    queueMicrotask(() => {
+      if (cached?.id === pledgeId) setPledge(cached);
+      setStep("payment");
+    });
+
+    if (paymentResult === "cancel") {
+      queueMicrotask(() => setError("Bạn đã hủy thanh toán. Có thể mở lại VietQR khi sẵn sàng."));
+      return;
+    }
+    if (paymentResult === "error") {
+      queueMicrotask(() => setError("SePay chưa hoàn tất được giao dịch. Hãy thử lại hoặc liên hệ BTC."));
+      return;
+    }
+
+    let active = true;
+    let attempts = 0;
+    async function pollPayment() {
+      if (!active) return;
+      try {
+        const response = await fetch(`/api/pledges?id=${encodeURIComponent(pledgeId!)}`, { cache: "no-store" });
+        const data = await response.json() as { pledge?: Pledge };
+        if (data.pledge) {
+          const next = { ...(cached ?? data.pledge), ...data.pledge };
+          setPledge(next);
+          localStorage.setItem("badminton-pledge", JSON.stringify(next));
+          if (data.pledge.status === "confirmed") {
+            setStep("done");
+            setError("");
+            window.history.replaceState({}, "", window.location.pathname);
+            await loadStats();
+            return;
+          }
+        }
+      } catch { /* SePay can redirect before the IPN has arrived */ }
+      attempts += 1;
+      if (active && attempts < 12) window.setTimeout(pollPayment, 1500);
+      else if (active) setError("Đã nhận kết quả từ SePay nhưng đang chờ IPN xác nhận. Trang sẽ tự cập nhật khi giao dịch được đối soát.");
+    }
+    void pollPayment();
+    return () => { active = false; };
+  }, []);
+
   function choosePlan(next: Plan) { setPlan(next); setDates(next === "full" ? DATES.map(d => d.value) : []); setError(""); }
   function toggleDate(value: string) {
     if (plan === "full") return;
     const max = plan === "flex" ? 2 : 1;
     setDates(current => current.includes(value) ? current.filter(d => d !== value) : current.length >= max ? [...current.slice(1), value] : [...current, value]);
+  }
+  async function startCheckout(nextPledge: Pledge) {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/sepay/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pledgeId: nextPledge.id }),
+      });
+      const data = await response.json() as CheckoutResponse;
+      if (!response.ok || !data.checkoutUrl || !data.fields) throw new Error(data.error || "Chưa thể mở cổng thanh toán SePay.");
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.checkoutUrl;
+      for (const [field, value] of Object.entries(data.fields)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = field;
+        input.value = String(value);
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+    } catch (checkoutError) {
+      setError(checkoutError instanceof Error ? checkoutError.message : "Chưa thể mở cổng thanh toán SePay.");
+      setLoading(false);
+    }
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setError("");
@@ -95,7 +143,7 @@ export default function Home() {
       const r = await fetch("/api/pledges", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, contact, plan, selectedDates: dates }) });
       const data = await r.json() as { pledge?: Pledge; error?: string };
       if (!r.ok || !data.pledge) throw new Error(data.error || "Chưa thể tạo pledge.");
-      setPledge(data.pledge); localStorage.setItem("badminton-pledge", JSON.stringify(data.pledge)); setStep("payment"); await loadStats();
+      setPledge(data.pledge); localStorage.setItem("badminton-pledge", JSON.stringify(data.pledge)); setStep("payment"); await loadStats(); await startCheckout(data.pledge);
     } catch (e) { setError(e instanceof Error ? e.message : "Có lỗi xảy ra."); } finally { setLoading(false); }
   }
   async function reportPayment() {
@@ -121,7 +169,7 @@ export default function Home() {
         <h1 className="font-display text-[clamp(3rem,7vw,6.2rem)] font-black leading-[.98] tracking-[-.045em]">Vote ngày.<br /><span className="text-[#28745a]">Giữ sân.</span> Ra cầu.</h1>
         <p className="mt-7 max-w-xl text-base leading-7 text-[#4c665b] sm:text-lg">Chọn gói phù hợp, thanh toán một lần và biết chắc Chủ nhật nào mình có sân. Giá trụ chỉ dành cho người cam kết sớm.</p>
         <div className="mt-9 grid max-w-xl grid-cols-3 gap-3">
-          {[{ n: `${average}/12`, t: "Bình quân/buổi" }, { n: stats.totalPledges, t: "Người đã vote" }, { n: stats.reportedPayments, t: "Đã báo chuyển" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
+          {[{ n: `${average}/12`, t: "Bình quân/buổi" }, { n: stats.totalPledges, t: "Người đã vote" }, { n: stats.reportedPayments, t: "Đã thanh toán" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
         </div>
         <div className="mt-8 max-w-xl rounded-3xl bg-[#17362b] p-5 text-white shadow-[0_22px_70px_rgba(23,54,43,.18)] sm:p-6">
           <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Tiến độ từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Mục tiêu 12 người để mở 2 sân</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
@@ -143,14 +191,14 @@ export default function Home() {
         {step === "payment" && pledge && <div className="p-5 sm:p-8">
           <button onClick={() => setStep("vote")} className="mb-6 flex items-center gap-1 text-xs font-bold text-[#557064]"><ChevronLeft className="h-4 w-4" /> Quay lại</button>
           <div className="text-center"><p className="text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Bước 2/2</p><h2 className="font-display mt-2 text-3xl font-black">Quét QR để chốt suất</h2><p className="mt-2 text-sm text-[#6b7f74]">{planLabel(pledge.plan)} · {pledge.selectedDates.length} buổi</p></div>
-          {!paymentConfigured && <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs font-bold text-amber-800">Bản preview — QR ngân hàng sẽ hoạt động sau khi cấu hình tài khoản nhận tiền.</div>}
-          <div className="mt-6"><PaymentQr reference={pledge.reference} amount={pledge.amount} /></div>
-          <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] p-4"><div className="flex justify-between text-sm"><span className="text-[#6b7f74]">Số tiền</span><strong>{money(pledge.amount)}</strong></div><div className="mt-3 flex justify-between text-sm"><span className="text-[#6b7f74]">Nội dung</span><button onClick={copyReference} className="flex items-center gap-1.5 font-black text-[#28745a]">{pledge.reference} {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></div><div className="mt-3 flex justify-between text-sm"><span className="text-[#6b7f74]">Ngân hàng</span><strong>{PAYMENT.bank}</strong></div></div>
+          <div className="mx-auto mt-6 grid aspect-square w-52 place-items-center rounded-3xl border-8 border-white bg-[#17362b] text-white shadow-[0_18px_60px_rgba(23,54,43,.16)]"><div className="px-5 text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#d8ff57] text-[#17362b]"><QrCode className="h-8 w-8" /></span><p className="mt-4 text-sm font-black">VietQR qua SePay</p><p className="mt-1 text-[11px] leading-4 text-white/65">Mã QR được tạo trên trang thanh toán bảo mật</p></div></div>
+          <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] p-4"><div className="flex justify-between text-sm"><span className="text-[#6b7f74]">Số tiền</span><strong>{money(pledge.amount)}</strong></div><div className="mt-3 flex justify-between text-sm"><span className="text-[#6b7f74]">Mã đơn</span><button onClick={copyReference} className="flex items-center gap-1.5 font-black text-[#28745a]">{pledge.reference} {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}</button></div><div className="mt-3 flex justify-between text-sm"><span className="text-[#6b7f74]">Đối soát</span><strong>Tự động qua IPN</strong></div></div>
           {error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-          <button onClick={reportPayment} disabled={loading} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#d8ff57] px-5 text-sm font-black hover:bg-[#ccf04f] disabled:opacity-60">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Banknote className="h-5 w-5" />} {paymentConfigured ? "Tôi đã chuyển khoản" : "Đánh dấu đã chuyển (demo)"}</button>
+          <button onClick={() => startCheckout(pledge)} disabled={loading} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#d8ff57] px-5 text-sm font-black hover:bg-[#ccf04f] disabled:opacity-60">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <QrCode className="h-5 w-5" />} Mở mã VietQR trên SePay</button>
+          <button onClick={reportPayment} disabled={loading} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#d7dfd5] px-5 text-xs font-bold text-[#557064] hover:bg-[#f4f6ee] disabled:opacity-60"><Banknote className="h-4 w-4" /> Báo đã chuyển nếu chưa tự xác nhận</button>
         </div>}
 
-        {step === "done" && pledge && <div className="p-8 text-center sm:p-12"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[28px] bg-[#d8ff57]"><CheckCircle2 className="h-10 w-10" /></span><p className="mt-7 text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Đã ghi nhận</p><h2 className="font-display mt-2 text-4xl font-black">Hẹn bạn trên sân!</h2><p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-[#6b7f74]">Pledge <strong className="text-[#17362b]">{pledge.reference}</strong> đang chờ BTC đối soát.</p><div className="mt-7 rounded-2xl bg-[#f2f5ea] p-5 text-left"><div className="flex justify-between text-sm"><span>Gói</span><strong>{planLabel(pledge.plan)}</strong></div><div className="mt-3 flex justify-between text-sm"><span>Số buổi</span><strong>{pledge.selectedDates.length}</strong></div><div className="mt-3 flex justify-between text-sm"><span>Đã chuyển</span><strong>{money(pledge.amount)}</strong></div></div><button onClick={() => { setStep("vote"); setPledge(null); setName(""); setContact(""); choosePlan("full"); }} className="mt-7 text-sm font-black text-[#28745a] underline decoration-2 underline-offset-4">Tạo pledge khác</button></div>}
+        {step === "done" && pledge && <div className="p-8 text-center sm:p-12"><span className="mx-auto grid h-20 w-20 place-items-center rounded-[28px] bg-[#d8ff57]"><CheckCircle2 className="h-10 w-10" /></span><p className="mt-7 text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Thanh toán đã xác nhận</p><h2 className="font-display mt-2 text-4xl font-black">Hẹn bạn trên sân!</h2><p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-[#6b7f74]">Pledge <strong className="text-[#17362b]">{pledge.reference}</strong> đã được SePay đối soát tự động.</p><div className="mt-7 rounded-2xl bg-[#f2f5ea] p-5 text-left"><div className="flex justify-between text-sm"><span>Gói</span><strong>{planLabel(pledge.plan)}</strong></div><div className="mt-3 flex justify-between text-sm"><span>Số buổi</span><strong>{pledge.selectedDates.length}</strong></div><div className="mt-3 flex justify-between text-sm"><span>Đã chuyển</span><strong>{money(pledge.amount)}</strong></div></div><button onClick={() => { setStep("vote"); setPledge(null); setName(""); setContact(""); choosePlan("full"); }} className="mt-7 text-sm font-black text-[#28745a] underline decoration-2 underline-offset-4">Tạo pledge khác</button></div>}
       </div>
     </section>
 

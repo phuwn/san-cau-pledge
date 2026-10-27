@@ -12,9 +12,14 @@ Trang pledge và thanh toán QR cho hội cầu lông Chủ nhật.
    NEXT_PUBLIC_VIETQR_ACCOUNT_NO=...
    NEXT_PUBLIC_VIETQR_ACCOUNT_NAME=...
    NEXT_PUBLIC_PAYMENT_BANK_NAME=Techcombank
+   SEPAY_ENV=sandbox
+   SEPAY_MERCHANT_ID=SP-TEST-...
+   SEPAY_SECRET_KEY=...
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
    ```
 
-   `970407` là BIN VietQR của Techcombank. Có thể thay bằng ngân hàng khác.
+   Các biến `NEXT_PUBLIC_VIETQR_*` chỉ còn dùng cho QR dự phòng. Secret key
+   SePay tuyệt đối không được dùng tiền tố `NEXT_PUBLIC_` hoặc commit vào Git.
 2. Chạy `npm install`.
 3. Chạy `npm run dev`.
 
