@@ -8,7 +8,7 @@ export const SESSION_DATES = [
   { value: "2026-11-29", day: "29" },
 ] as const;
 
-export const MIN_SLOTS_PER_COURT = 5;
+export const MIN_SLOTS_PER_COURT = 6;
 export const MAX_PLAYERS_PER_COURT = 8;
 
 const DROP_IN_PRICE = 75_000;

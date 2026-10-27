@@ -160,11 +160,11 @@ export default function Home() {
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#a7b8aa] bg-white/70 px-3 py-1.5 text-xs font-bold"><Sparkles className="h-3.5 w-3.5" /> Cùng chốt sân trước, chơi thảnh thơi sau</div>
         <h1 className="font-display text-[clamp(3rem,7vw,6.2rem)] font-black leading-[.98] tracking-[-.045em]">Vote ngày.<br /><span className="text-[#28745a]">Giữ sân.</span> Ra cầu.</h1>
         <p className="mt-7 max-w-xl text-base leading-7 text-[#4c665b] sm:text-lg">Chọn bất kỳ Chủ nhật nào bạn muốn chơi. Chọn đủ cả tháng, hệ thống tự chuyển thành Trụ tháng với mức giá tốt nhất.</p>
-        <div className="mt-9 grid max-w-xl grid-cols-3 gap-3">
-          {[{ n: totalBookedSlots, t: "Suất đã chốt" }, { n: stats.totalPledges, t: "Người đã vote" }, { n: stats.reportedPayments, t: "Đã thanh toán" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
+        <div className="mt-9 grid max-w-xl grid-cols-2 gap-3">
+          {[{ n: totalBookedSlots, t: "Suất đã chốt" }, { n: stats.reportedPayments, t: "Người đã chốt" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
         </div>
         <div className="mt-8 max-w-xl rounded-3xl bg-[#17362b] p-5 text-white shadow-[0_22px_70px_rgba(23,54,43,.18)] sm:p-6">
-          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Sân cứng theo từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Mỗi 5 suất trả trước khóa 1 sân · tối đa 8 người/sân</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
+          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Sân cứng theo từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Mỗi 6 suất trả trước khóa 1 sân · tối đa 8 người/sân</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
           <div className="grid grid-cols-5 gap-2">{DATES.map(date => {
             const count = stats.dates[date.value] ?? 0;
             const court = courtPlan(count);
@@ -191,7 +191,7 @@ export default function Home() {
           <button disabled={loading || !selection} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#17362b] px-5 text-sm font-black text-white hover:bg-[#214a3b] disabled:cursor-not-allowed disabled:opacity-45">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <WalletCards className="h-5 w-5" />} {selection ? `Vote & tạo mã thanh toán · ${money(selection.amount)}` : "Chọn ngày để tiếp tục"} {!loading && selection && <ArrowRight className="h-4 w-4" />}</button>
           <div className="mt-5 rounded-2xl bg-[#f2f5ea] p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-[#557064]">Sau khi bạn chốt</p><div className="mt-3 grid gap-3 sm:grid-cols-3">{[
             { icon: ShieldCheck, title: "Giữ suất", detail: "Suất được tính ngay khi thanh toán xác nhận." },
-            { icon: Users, title: "Khóa sân", detail: "Mỗi 5 suất chốt tạo đủ quỹ cho 1 sân cứng." },
+            { icon: Users, title: "Khóa sân", detail: "Mỗi 6 suất chốt tạo đủ quỹ cho 1 sân cứng." },
             { icon: CheckCircle2, title: "Bận vẫn ổn", detail: "Có thể chuyển suất cho bạn bè nếu đổi lịch." },
           ].map(item => <div key={item.title} className="flex gap-2.5 sm:block"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-[#28745a]"><item.icon className="h-4 w-4" /></span><div><p className="text-xs font-black sm:mt-2">{item.title}</p><p className="mt-0.5 text-[10px] leading-4 text-[#6b7f74]">{item.detail}</p></div></div>)}</div></div>
         </form>}
