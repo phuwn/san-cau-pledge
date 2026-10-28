@@ -10,7 +10,7 @@ export const SESSION_DATES = [
 
 export const PLEDGE_TIME_ZONE = "Asia/Ho_Chi_Minh";
 export const FULL_PLEDGE_DEADLINE = "2026-11-05";
-export const FULL_PLEDGE_DEADLINE_LABEL = "05/11";
+export const FULL_PLEDGE_DEADLINE_LABEL = "00:00 05/11";
 export const FIRST_SUNDAY_DATE = SESSION_DATES.find(date => Number(date.day) <= 6)?.value ?? SESSION_DATES[0].value;
 
 const DROP_IN_PRICE = 75_000;
@@ -29,7 +29,7 @@ function dateKeyInTimeZone(date: Date) {
 }
 
 export function isFullPledgeDeadlinePassed(now = new Date()) {
-  return dateKeyInTimeZone(now) > FULL_PLEDGE_DEADLINE;
+  return dateKeyInTimeZone(now) >= FULL_PLEDGE_DEADLINE;
 }
 
 export function quoteSelection(sessionCount: number, fullPlanAvailable = true) {

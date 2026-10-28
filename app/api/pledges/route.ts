@@ -57,8 +57,8 @@ export async function POST(request: Request) {
     const quote = quoteSelection(selectedDates.length, !deadlinePassed);
     if (name.length < 2 || name.length > 60) return Response.json({ error: "Tên cần từ 2–60 ký tự." }, { status: 400 });
     if (contact.length > 100) return Response.json({ error: "Thông tin liên hệ quá dài." }, { status: 400 });
-    if (deadlinePassed && selectedDates.length === SESSION_DATES.length) return Response.json({ error: `Đã qua hạn chốt Trụ tháng ngày ${FULL_PLEDGE_DEADLINE_LABEL}.` }, { status: 400 });
-    if (deadlinePassed && selectedDates.includes(FIRST_SUNDAY_DATE)) return Response.json({ error: `Sau ngày ${FULL_PLEDGE_DEADLINE_LABEL}, Chủ nhật đầu tiên chỉ nhận vãng lai tại sân.` }, { status: 400 });
+    if (deadlinePassed && selectedDates.length === SESSION_DATES.length) return Response.json({ error: `Đăng ký Trụ tháng đã đóng từ ${FULL_PLEDGE_DEADLINE_LABEL}.` }, { status: 400 });
+    if (deadlinePassed && selectedDates.includes(FIRST_SUNDAY_DATE)) return Response.json({ error: `Từ ${FULL_PLEDGE_DEADLINE_LABEL}, Chủ nhật đầu tiên chỉ nhận vãng lai tại sân.` }, { status: 400 });
     if (!quote) return Response.json({ error: "Hãy chọn ít nhất một Chủ nhật hợp lệ." }, { status: 400 });
     const id = crypto.randomUUID(), reference = `SC${id.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
     const [created] = await getDb().insert(pledges).values({ id, reference, name, contact, plan: quote.plan, selectedDates: JSON.stringify(selectedDates), seatCount: selectedDates.length, amount: quote.amount }).returning();
