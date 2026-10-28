@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { ensureDb, getDb } from "../../../db";
 import { pledges } from "../../../db/schema";
-import { quoteSelection, SESSION_DATES } from "../../../lib/pledge-config";
+import { FIRST_SUNDAY_DATE, FULL_PLEDGE_DEADLINE_LABEL, isFullPledgeDeadlinePassed, quoteSelection, SESSION_DATES } from "../../../lib/pledge-config";
 
 const ALLOWED_DATES = new Set<string>(SESSION_DATES.map(date => date.value));
 
@@ -53,9 +53,12 @@ export async function POST(request: Request) {
     const body = await request.json() as { name?: string; contact?: string; selectedDates?: string[] };
     const name = body.name?.trim() ?? "", contact = body.contact?.trim() ?? "";
     const selectedDates = Array.isArray(body.selectedDates) ? [...new Set(body.selectedDates.filter(date => ALLOWED_DATES.has(date)))] : [];
-    const quote = quoteSelection(selectedDates.length);
+    const deadlinePassed = isFullPledgeDeadlinePassed();
+    const quote = quoteSelection(selectedDates.length, !deadlinePassed);
     if (name.length < 2 || name.length > 60) return Response.json({ error: "Tên cần từ 2–60 ký tự." }, { status: 400 });
     if (contact.length > 100) return Response.json({ error: "Thông tin liên hệ quá dài." }, { status: 400 });
+    if (deadlinePassed && selectedDates.length === SESSION_DATES.length) return Response.json({ error: `Đã qua hạn chốt Trụ tháng ngày ${FULL_PLEDGE_DEADLINE_LABEL}.` }, { status: 400 });
+    if (deadlinePassed && selectedDates.includes(FIRST_SUNDAY_DATE)) return Response.json({ error: `Sau ngày ${FULL_PLEDGE_DEADLINE_LABEL}, Chủ nhật đầu tiên chỉ nhận vãng lai tại sân.` }, { status: 400 });
     if (!quote) return Response.json({ error: "Hãy chọn ít nhất một Chủ nhật hợp lệ." }, { status: 400 });
     const id = crypto.randomUUID(), reference = `SC${id.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
     const [created] = await getDb().insert(pledges).values({ id, reference, name, contact, plan: quote.plan, selectedDates: JSON.stringify(selectedDates), seatCount: selectedDates.length, amount: quote.amount }).returning();

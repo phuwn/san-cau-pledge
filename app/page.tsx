@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Banknote, CalendarDays, Check, CheckCircle2, ChevronLeft, Copy, Loader2, QrCode, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { courtPlan, planName, quoteSelection, SESSION_DATES, type Plan } from "../lib/pledge-config";
+import { FIRST_SUNDAY_DATE, FULL_PLEDGE_DEADLINE_LABEL, isFullPledgeDeadlinePassed, planName, quoteSelection, SESSION_DATES, type Plan } from "../lib/pledge-config";
 
 type Step = "vote" | "payment" | "done";
 type Pledge = { id: string; reference: string; name: string; plan: Plan; selectedDates: string[]; amount: number; status: "pending" | "reported" | "confirmed" };
@@ -27,7 +27,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [selectedRosterDate, setSelectedRosterDate] = useState<string | null>(null);
-  const selection = useMemo(() => quoteSelection(dates.length), [dates.length]);
+  const [deadlinePassed, setDeadlinePassed] = useState(() => isFullPledgeDeadlinePassed());
+  const selection = useMemo(() => quoteSelection(dates.length, !deadlinePassed), [dates.length, deadlinePassed]);
   const totalBookedSlots = Object.values(stats.dates).reduce((sum, count) => sum + count, 0);
   const selectedRosterDay = DATES.find(date => date.value === selectedRosterDate);
   const selectedRoster = selectedRosterDate ? (stats.participants[selectedRosterDate] ?? []) : [];
@@ -42,6 +43,20 @@ export default function Home() {
       .then(nextStats => { if (active && nextStats) setStats(nextStats); })
       .catch(() => { /* the database can still be warming up */ });
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const refreshDeadline = () => {
+      const passed = isFullPledgeDeadlinePassed();
+      setDeadlinePassed(passed);
+      if (passed) setDates(current => current.filter(date => date !== FIRST_SUNDAY_DATE));
+    };
+    const timer = window.setInterval(refreshDeadline, 60_000);
+    window.addEventListener("focus", refreshDeadline);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshDeadline);
+    };
   }, []);
 
   useEffect(() => {
@@ -95,6 +110,7 @@ export default function Home() {
   }, []);
 
   function toggleDate(value: string) {
+    if (deadlinePassed && value === FIRST_SUNDAY_DATE) return;
     setDates(current => current.includes(value) ? current.filter(date => date !== value) : [...current, value]);
     setError("");
   }
@@ -164,16 +180,10 @@ export default function Home() {
           {[{ n: totalBookedSlots, t: "Suất đã chốt" }, { n: stats.reportedPayments, t: "Người đã chốt" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
         </div>
         <div className="mt-8 max-w-xl rounded-3xl bg-[#17362b] p-5 text-white shadow-[0_22px_70px_rgba(23,54,43,.18)] sm:p-6">
-          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Sân cứng theo từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Mỗi 6 suất trả trước khóa 1 sân · tối đa 8 người/sân</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
+          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Người chơi theo từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Nhấn vào ngày để xem danh sách đã chốt</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
           <div className="grid grid-cols-5 gap-2">{DATES.map(date => {
             const count = stats.dates[date.value] ?? 0;
-            const court = courtPlan(count);
-            const note = court.courts === 0
-              ? `${court.slotsToNextCourt} suất nữa`
-              : court.overflow > 0
-                ? `${court.slotsToNextCourt} suất mở sân ${court.courts + 1}`
-                : `${Math.max(0, court.capacity - count)} chỗ còn lại`;
-            return <button type="button" key={date.value} onClick={() => setSelectedRosterDate(date.value)} aria-label={`Xem người tham gia Chủ nhật ${date.day}`} className="rounded-2xl bg-white/8 p-2.5 text-center transition hover:-translate-y-0.5 hover:bg-white/13 focus:outline-none focus:ring-2 focus:ring-[#d8ff57]"><p className="text-[10px] font-bold text-white/55">CN</p><p className="mt-0.5 text-lg font-black">{date.day}</p><p className="mt-2 text-sm font-black text-[#d8ff57]">{court.courts} sân</p><p className="mt-1 text-[10px] font-bold text-white/75">{count} suất chốt</p><p className="mt-1 min-h-7 text-[9px] leading-3 text-white/50">{note}</p><p className="mt-1 text-[8px] font-bold uppercase tracking-wide text-[#d8ff57]/65">Xem người chơi</p></button>;
+            return <button type="button" key={date.value} onClick={() => setSelectedRosterDate(date.value)} aria-label={`Xem người tham gia Chủ nhật ${date.day}`} className="rounded-2xl bg-white/8 p-2.5 text-center transition hover:-translate-y-0.5 hover:bg-white/13 focus:outline-none focus:ring-2 focus:ring-[#d8ff57]"><p className="text-[10px] font-bold text-white/55">CN</p><p className="mt-0.5 text-lg font-black">{date.day}</p><p className="mt-3 text-2xl font-black text-[#d8ff57]">{count}</p><p className="mt-0.5 text-[10px] font-bold text-white/75">người chơi</p><p className="mt-3 text-[8px] font-bold uppercase tracking-wide text-[#d8ff57]/65">Xem danh sách</p></button>;
           })}</div>
         </div>
       </div>
@@ -181,8 +191,11 @@ export default function Home() {
       <div className="overflow-hidden rounded-[32px] border border-[#c8d4c7] bg-white shadow-[0_28px_100px_rgba(23,54,43,.13)]">
         {step === "vote" && <form onSubmit={submit} className="p-5 sm:p-8">
           <div className="mb-7 flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#28745a]">Bước 1/2</p><h2 className="font-display mt-2 text-3xl font-black tracking-tight">Chọn lời hứa ra sân</h2></div><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eef4df]"><CalendarDays className="h-5 w-5" /></span></div>
-          <div className="rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">Lịch linh hoạt</p><span className="rounded-full bg-[#eef4df] px-2.5 py-1 text-[10px] font-black text-[#28745a]">Chọn bao nhiêu buổi tùy bạn</span></div><p className="mt-2 text-xs leading-5 text-[#6b7f74]">1 buổi 75k · 2–4 buổi 67,5k/buổi · chọn đủ tháng tự động thành Trụ tháng 65k/buổi.</p></div>
-          <div className="mt-6"><div className="mb-3 flex justify-between"><label className="text-sm font-black">Chọn ngày chơi</label><span className="text-xs font-semibold text-[#6b7f74]">{dates.length === DATES.length ? "Đã chọn toàn bộ" : `${dates.length}/${DATES.length} ngày`}</span></div><div className="grid grid-cols-5 gap-2">{DATES.map(date => <button type="button" key={date.value} onClick={() => toggleDate(date.value)} aria-pressed={dates.includes(date.value)} className={`rounded-2xl border px-1 py-3 text-center transition ${dates.includes(date.value) ? "border-[#17362b] bg-[#17362b] text-white shadow-[0_8px_24px_rgba(23,54,43,.16)]" : "border-[#d7dfd5] text-[#557064] hover:border-[#9fb0a2]"}`}><span className="block text-[10px] font-bold opacity-60">CN</span><span className="block text-lg font-black">{date.day}</span></button>)}</div></div>
+          <div className="rounded-2xl border border-[#d7dfd5] bg-[#fbfcf7] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">Lịch linh hoạt</p><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${deadlinePassed ? "bg-[#f5e9e3] text-[#9a482d]" : "bg-[#eef4df] text-[#28745a]"}`}>{deadlinePassed ? "Đã hết hạn Trụ tháng" : `Hạn chốt Trụ ${FULL_PLEDGE_DEADLINE_LABEL}`}</span></div><p className="mt-2 text-xs leading-5 text-[#6b7f74]">{deadlinePassed ? `Bạn vẫn có thể đặt trước các Chủ nhật còn lại. CN 01/11 chỉ nhận vãng lai tại sân.` : `1 buổi 75k · 2–4 buổi 67,5k/buổi · chọn đủ tháng trước hết ngày ${FULL_PLEDGE_DEADLINE_LABEL} tự động thành Trụ tháng 65k/buổi.`}</p></div>
+          <div className="mt-6"><div className="mb-3 flex justify-between"><label className="text-sm font-black">Chọn ngày chơi</label><span className="text-xs font-semibold text-[#6b7f74]">{dates.length === DATES.length ? "Đã chọn toàn bộ" : `${dates.length}/${DATES.length} ngày`}</span></div><div className="grid grid-cols-5 gap-2">{DATES.map(date => {
+            const unavailable = deadlinePassed && date.value === FIRST_SUNDAY_DATE;
+            return <button type="button" key={date.value} onClick={() => toggleDate(date.value)} disabled={unavailable} aria-pressed={dates.includes(date.value)} aria-label={unavailable ? `Chủ nhật ${date.day}, chỉ nhận vãng lai tại sân` : `Chọn Chủ nhật ${date.day}`} className={`rounded-2xl border px-1 py-3 text-center transition ${unavailable ? "cursor-not-allowed border-[#e1ddd6] bg-[#f4f2ed] text-[#9b9a92]" : dates.includes(date.value) ? "border-[#17362b] bg-[#17362b] text-white shadow-[0_8px_24px_rgba(23,54,43,.16)]" : "border-[#d7dfd5] text-[#557064] hover:border-[#9fb0a2]"}`}><span className="block text-[10px] font-bold opacity-60">{unavailable ? "VÃNG LAI" : "CN"}</span><span className="block text-lg font-black">{date.day}</span></button>;
+          })}</div></div>
           <div className={`mt-4 rounded-2xl border p-4 transition ${selection ? "border-[#28745a] bg-[#edf7ef]" : "border-dashed border-[#c8d4c7] bg-white"}`}>
             {selection ? <div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#28745a] text-white"><Check className="h-4 w-4" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-black">{selection.name}</p><span className="rounded-full bg-[#d8ff57] px-2 py-0.5 text-[10px] font-black">{selection.badge}</span></div><p className="mt-1 text-xs text-[#6b7f74]">{money(selection.pricePerSession)}/buổi · {dates.length} Chủ nhật</p></div><p className="font-display text-lg font-black">{money(selection.amount)}</p></div> : <p className="text-center text-sm font-semibold text-[#6b7f74]">Chọn ít nhất 1 ngày để xem mức giá</p>}
           </div>
@@ -191,7 +204,7 @@ export default function Home() {
           <button disabled={loading || !selection} className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#17362b] px-5 text-sm font-black text-white hover:bg-[#214a3b] disabled:cursor-not-allowed disabled:opacity-45">{loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <WalletCards className="h-5 w-5" />} {selection ? `Vote & tạo mã thanh toán · ${money(selection.amount)}` : "Chọn ngày để tiếp tục"} {!loading && selection && <ArrowRight className="h-4 w-4" />}</button>
           <div className="mt-5 rounded-2xl bg-[#f2f5ea] p-4"><p className="text-xs font-black uppercase tracking-[.12em] text-[#557064]">Sau khi bạn chốt</p><div className="mt-3 grid gap-3 sm:grid-cols-3">{[
             { icon: ShieldCheck, title: "Giữ suất", detail: "Suất được tính ngay khi thanh toán xác nhận." },
-            { icon: Users, title: "Khóa sân", detail: "Mỗi 6 suất chốt tạo đủ quỹ cho 1 sân cứng." },
+            { icon: Users, title: "Chốt sân", detail: "BTC dựa trên số người đã chốt để đặt sân cứng." },
             { icon: CheckCircle2, title: "Bận vẫn ổn", detail: "Có thể chuyển suất cho bạn bè nếu đổi lịch." },
           ].map(item => <div key={item.title} className="flex gap-2.5 sm:block"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-[#28745a]"><item.icon className="h-4 w-4" /></span><div><p className="text-xs font-black sm:mt-2">{item.title}</p><p className="mt-0.5 text-[10px] leading-4 text-[#6b7f74]">{item.detail}</p></div></div>)}</div></div>
         </form>}
