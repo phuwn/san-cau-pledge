@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Banknote, CalendarDays, Check, CheckCircle2, ChevronLeft, Copy, Loader2, QrCode, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
+import { ArrowRight, Banknote, CalendarDays, Check, CheckCircle2, ChevronLeft, Copy, Eye, Loader2, QrCode, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { FIRST_SUNDAY_DATE, FULL_PLEDGE_DEADLINE_LABEL, isFullPledgeDeadlinePassed, planName, quoteSelection, SESSION_DATES, type Plan } from "../lib/pledge-config";
 
@@ -180,10 +180,10 @@ export default function Home() {
           {[{ n: totalBookedSlots, t: "Suất đã chốt" }, { n: stats.reportedPayments, t: "Người đã chốt" }].map(item => <div key={item.t} className="rounded-2xl border border-[#c8d4c7] bg-white/75 p-4"><p className="text-2xl font-black">{item.n}</p><p className="mt-1 text-xs font-semibold text-[#6b7f74]">{item.t}</p></div>)}
         </div>
         <div className="mt-8 max-w-xl rounded-3xl bg-[#17362b] p-5 text-white shadow-[0_22px_70px_rgba(23,54,43,.18)] sm:p-6">
-          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Người chơi theo từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Nhấn vào ngày để xem danh sách đã chốt</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
+          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-bold">Suất theo từng Chủ nhật</p><p className="mt-1 text-xs text-white/60">Nhấn vào ngày để xem người đã chốt</p></div><Users className="h-5 w-5 text-[#d8ff57]" /></div>
           <div className="grid grid-cols-5 gap-2">{DATES.map(date => {
             const count = stats.dates[date.value] ?? 0;
-            return <button type="button" key={date.value} onClick={() => setSelectedRosterDate(date.value)} aria-label={`Xem người tham gia Chủ nhật ${date.day}`} className="rounded-2xl bg-white/8 p-2.5 text-center transition hover:-translate-y-0.5 hover:bg-white/13 focus:outline-none focus:ring-2 focus:ring-[#d8ff57]"><p className="text-[10px] font-bold text-white/55">CN</p><p className="mt-0.5 text-lg font-black">{date.day}</p><p className="mt-3 text-2xl font-black text-[#d8ff57]">{count}</p><p className="mt-0.5 text-[10px] font-bold text-white/75">người chơi</p><p className="mt-3 text-[8px] font-bold uppercase tracking-wide text-[#d8ff57]/65">Xem danh sách</p></button>;
+            return <button type="button" key={date.value} onClick={() => setSelectedRosterDate(date.value)} aria-label={`Xem người tham gia Chủ nhật ${date.day}`} title="Xem người đã chốt" className="group rounded-2xl bg-white/8 p-2.5 text-center transition hover:-translate-y-0.5 hover:bg-white/13 focus:outline-none focus:ring-2 focus:ring-[#d8ff57]"><p className="text-[10px] font-bold text-white/55">CN</p><p className="mt-0.5 text-lg font-black">{date.day}</p><p className="mt-3 text-2xl font-black text-[#d8ff57]">{count}</p><p className="mt-0.5 text-[10px] font-bold text-white/75">suất</p><span aria-hidden="true" className="mx-auto mt-2.5 grid h-6 w-6 place-items-center rounded-full bg-white/10 text-[#d8ff57]/75 transition group-hover:bg-[#d8ff57] group-hover:text-[#17362b]"><Eye className="h-3.5 w-3.5" /></span></button>;
           })}</div>
         </div>
       </div>
