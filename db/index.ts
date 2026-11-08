@@ -31,6 +31,13 @@ async function seedRequestedPledges() {
   for (const pledge of requestedPledges) {
     const selectedDates = JSON.stringify(pledge.dates);
     await sql`
+      WITH canonical AS (
+        SELECT id
+        FROM pledges
+        WHERE lower(btrim(name)) = lower(${pledge.name})
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+      )
       UPDATE pledges
       SET name = ${pledge.name},
           plan = ${pledge.plan},
@@ -38,7 +45,7 @@ async function seedRequestedPledges() {
           seat_count = ${pledge.dates.length},
           amount = ${pledge.amount},
           status = 'confirmed'
-      WHERE lower(btrim(name)) = lower(${pledge.name})
+      WHERE id IN (SELECT id FROM canonical)
     `;
     await sql`
       INSERT INTO pledges (id, reference, name, contact, plan, selected_dates, seat_count, amount, status)
@@ -53,6 +60,20 @@ async function seedRequestedPledges() {
         seat_count = EXCLUDED.seat_count,
         amount = EXCLUDED.amount,
         status = EXCLUDED.status
+    `;
+    await sql`
+      WITH canonical AS (
+        SELECT id
+        FROM pledges
+        WHERE lower(btrim(name)) = lower(${pledge.name})
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+      )
+      UPDATE pledges
+      SET status = 'pending'
+      WHERE lower(btrim(name)) = lower(${pledge.name})
+        AND id NOT IN (SELECT id FROM canonical)
+        AND status = 'confirmed'
     `;
   }
 }
