@@ -5,14 +5,6 @@ import * as schema from "./schema";
 let database: NeonHttpDatabase<typeof schema> | undefined;
 let initialization: Promise<void> | undefined;
 
-const NOVEMBER_DATES = ["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"];
-
-const requestedPledges = [
-  { id: "seed-2026-11-khang", reference: "SC26KHG1", name: "Khang", plan: "full", dates: NOVEMBER_DATES, amount: 325_000 },
-  { id: "seed-2026-11-huy", reference: "SC26HUY1", name: "Huy", plan: "full", dates: NOVEMBER_DATES, amount: 325_000 },
-  { id: "seed-2026-11-an", reference: "SC26ANN1", name: "An", plan: "flex", dates: NOVEMBER_DATES.slice(1), amount: 270_000 },
-] as const;
-
 function databaseUrl() {
   const value = process.env.DATABASE_URL;
   if (!value) {
@@ -24,58 +16,6 @@ function databaseUrl() {
 export function getDb() {
   database ??= drizzle(neon(databaseUrl()), { schema });
   return database;
-}
-
-async function seedRequestedPledges() {
-  const sql = neon(databaseUrl());
-  for (const pledge of requestedPledges) {
-    const selectedDates = JSON.stringify(pledge.dates);
-    await sql`
-      WITH canonical AS (
-        SELECT id
-        FROM pledges
-        WHERE lower(btrim(name)) = lower(${pledge.name})
-        ORDER BY created_at ASC, id ASC
-        LIMIT 1
-      )
-      UPDATE pledges
-      SET name = ${pledge.name},
-          plan = ${pledge.plan},
-          selected_dates = ${selectedDates},
-          seat_count = ${pledge.dates.length},
-          amount = ${pledge.amount},
-          status = 'confirmed'
-      WHERE id IN (SELECT id FROM canonical)
-    `;
-    await sql`
-      INSERT INTO pledges (id, reference, name, contact, plan, selected_dates, seat_count, amount, status)
-      SELECT ${pledge.id}, ${pledge.reference}, ${pledge.name}, '', ${pledge.plan}, ${selectedDates}, ${pledge.dates.length}, ${pledge.amount}, 'confirmed'
-      WHERE NOT EXISTS (
-        SELECT 1 FROM pledges WHERE lower(btrim(name)) = lower(${pledge.name})
-      )
-      ON CONFLICT (id) DO UPDATE SET
-        name = EXCLUDED.name,
-        plan = EXCLUDED.plan,
-        selected_dates = EXCLUDED.selected_dates,
-        seat_count = EXCLUDED.seat_count,
-        amount = EXCLUDED.amount,
-        status = EXCLUDED.status
-    `;
-    await sql`
-      WITH canonical AS (
-        SELECT id
-        FROM pledges
-        WHERE lower(btrim(name)) = lower(${pledge.name})
-        ORDER BY created_at ASC, id ASC
-        LIMIT 1
-      )
-      UPDATE pledges
-      SET status = 'pending'
-      WHERE lower(btrim(name)) = lower(${pledge.name})
-        AND id NOT IN (SELECT id FROM canonical)
-        AND status = 'confirmed'
-    `;
-  }
 }
 
 export function ensureDb() {
@@ -93,6 +33,6 @@ export function ensureDb() {
       created_at timestamptz NOT NULL DEFAULT now(),
       reported_at timestamptz
     )
-  `.then(seedRequestedPledges);
+  `.then(() => undefined);
   return initialization;
 }
